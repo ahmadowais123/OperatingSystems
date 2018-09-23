@@ -1,10 +1,17 @@
 #include "myheader.h"
 
-//Funcion prototype
+//Function prototype
 void my_system_version_f(char *line, char *myfifo);
 
 int main(int argc, char *argv[]) {
-    char *myfifo = "myfifo";
+    char *myfifo;
+
+    if(argc != 2) {
+        printf("Usage error %s <path_to_fifo>\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    myfifo = argv[1];
 
     setbuf(stdout, NULL);
     while(1) {
