@@ -28,6 +28,11 @@ int main(int argc, char *argv[]) {
     }
 }
 
+/**
+ * Implementation of the system() function using fork
+ * @param line The command input by the user in the shell
+ * @param myfifo Name of the FIFO to be used for inter process communication
+ */
 void my_system_version_f(char *line, char *myfifo) {
     int status;
     char *args[20];
@@ -35,8 +40,14 @@ void my_system_version_f(char *line, char *myfifo) {
     int pid = fork();
 
     if(pid == 0) {
+        //Create a file descriptor for the FIFO
         int fd_in = open(myfifo, O_RDONLY);
+
+        //Duplicate the file descriptor to the stdin file descriptor
         dup2(fd_in, 0);
+
+        //Close the FIFO file descriptor since we only need one
+        //although both can be used interchangeably
         close(fd_in);
         initialize(args);
         parse_command(line, args);

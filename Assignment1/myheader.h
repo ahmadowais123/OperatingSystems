@@ -11,6 +11,10 @@
 #include <fcntl.h>
 #include <time.h>
 
+/**
+ * Method to get the current time in milliseconds
+ * @return Return the current time in milliseconds
+ */
 double getTime() {
 	struct timespec *ts = malloc(sizeof(struct timespec));
 	if(clock_gettime(CLOCK_REALTIME, ts) == -2) {
@@ -21,7 +25,12 @@ double getTime() {
 	return time; 
 }
 
-int parse_command(char *line, char *args[]) {
+/**
+ * This function parses and tokenizes the input command
+ * @param line The command input by the user in the shell
+ * @param args The array of strings in which the tokens are stored
+ */
+void parse_command(char *line, char *args[]) {
     char *token;
     int i =0;
 
@@ -32,9 +41,13 @@ int parse_command(char *line, char *args[]) {
         if (strlen(token) > 0)
             args[i++] = token;
     }
-    return i;
+    return;
 }
 
+/**
+ * Helper method to initialize the arguments array to NULL pointers
+ * @param args The array to be initialized
+ */
 void initialize(char *args[]) {
     int i;
     for(i=0; i<20; i++) {
@@ -42,10 +55,19 @@ void initialize(char *args[]) {
     }
 }
 
+/**
+ * Returns the length of a string
+ * @param line The command input by the user in the shell
+ * @return Length of string
+ */
 int length(char *line) {
     return strlen(line);
 }
 
+/**
+ * Uses the stdin to get the command that the user wants to run
+ * @return The command input by the user in the shell
+ */
 char* get_a_line() {
     char *line;
     size_t lineSize = 0;

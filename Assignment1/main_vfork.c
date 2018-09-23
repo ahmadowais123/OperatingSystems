@@ -1,6 +1,6 @@
 #include "myheader.h"
 
-//Fucntion prototype
+//Function prototype
 void my_system_version_v(char *line);
 
 int main(int argc, char *argv[]) {
@@ -20,15 +20,21 @@ int main(int argc, char *argv[]) {
     }
 }
 
+/**
+ * Implemation of the system() function using vfork
+ * @param line The command input by the user in the shell
+ */
 void my_system_version_v(char *line) {
-    int pid = vfork();
     int status;
     char *args[20];
 
-    initialize(args);
-    parse_command(line, args);
+    //Spawn the child process
+    int pid = vfork();
 
     if(pid == 0) {
+        initialize(args);
+        parse_command(line, args);
+
         execvp(args[0], args);
         return;
     } else {

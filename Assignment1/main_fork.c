@@ -1,6 +1,6 @@
 #include "myheader.h"
 
-//Funcion prototype
+//Function prototype
 void my_system_version_f(char *line);
 
 int main(int argc, char *argv[]) {
@@ -20,10 +20,15 @@ int main(int argc, char *argv[]) {
     }
 }
 
+/**
+ * Implementation of the system() function using fork
+ * @param line The command input by the user in the shell
+ */
 void my_system_version_f(char *line) {
     int status;
     char *args[20];
 
+    //Spawn the child process
     int pid = fork();
 
     if(pid == 0) {
