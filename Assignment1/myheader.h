@@ -68,11 +68,17 @@ int length(char *line) {
  * Uses the stdin to get the command that the user wants to run
  * @return The command input by the user in the shell
  */
-char* get_a_line() {
+char *get_a_line() {
     char *line;
     size_t lineSize = 0;
     getline(&line, &lineSize, stdin);
     return line;
+}
+
+char *get_current_working_dir() {
+    char *cwd = malloc(sizeof(char)*200);
+    getcwd(cwd, 200);
+    return cwd;
 }
 
 
