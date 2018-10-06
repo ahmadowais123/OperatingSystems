@@ -34,6 +34,9 @@ void parse_command(char *line, char *args[]) {
     char *token;
     int i =0;
 
+    //Iterates over the strings until no more arguments left
+    //Removes any whitespace characters at the end of an argument and replaces with \0
+    //Adds it to the array of arguments
     while ((token = strsep(&line, " \t\n")) != NULL) {
         for (int j = 0; j < strlen(token); j++)
             if (token[j] <= 32)
@@ -80,7 +83,5 @@ char *get_current_working_dir() {
     getcwd(cwd, 200);
     return cwd;
 }
-
-
 
 #endif
