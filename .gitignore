@@ -1,3 +1,6 @@
+*
+!*.*
+!*/
 .idea
 clone
 read
@@ -6,3 +9,4 @@ fork
 vfork
 myfifo
 *.txt
+*.zip
