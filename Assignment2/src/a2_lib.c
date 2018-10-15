@@ -19,9 +19,15 @@ int main(int argc, char **argv) {
 		exit(1);
 	}
 
-	kv_store_write("0", "My name is Owais");
-	kv_store_write("256", "My name is Khan");
+//	kv_store_write("0", "value1key0");
+//	kv_store_write("0", "value2key0");
+//	kv_store_write("255", "value1key255");
+//	kv_store_write("255", "value2key255");
 
+	printf("%s\n",kv_store_read("0"));
+	printf("%s\n",kv_store_read("0"));
+	printf("%s\n",kv_store_read("255"));
+	printf("%s\n",kv_store_read("255"));
 }
 
 int  kv_store_create(const char *name) {
@@ -48,6 +54,17 @@ int  kv_store_create(const char *name) {
 	return 0;
 }
 
+int hashFunction(char *key) {
+	int hash = 5381;
+	int c;
+
+	while (c = *key++) {
+		hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+	}
+
+	return hash;
+}
+
 int kv_store_write(const char *key, const char *value) {
 	int index = atoi(key);
 	long pairOffset = sizeof(kvpair) * memory->writeCounters[index];
@@ -59,6 +76,8 @@ int kv_store_write(const char *key, const char *value) {
 
 	memory->writeCounters[index] = memory->writeCounters[index] + 1;
 	memory->writeCounters[index] = memory->writeCounters[index]%numberPods;
+
+	return 0;
 }
 
 char *kv_store_read(const char *key) {
@@ -76,9 +95,13 @@ char *kv_store_read(const char *key) {
 };
 
 char **kv_store_read_all(const char *key) {
-
+	char **string;
+	return string;
 }
 
 void kv_delete_db() {
-	munmap(memory, memorySize);
+	if(munmap(memory, memorySize) == -1){
+		perror("Failed to delete database");
+		exit(1);
+	}
 }

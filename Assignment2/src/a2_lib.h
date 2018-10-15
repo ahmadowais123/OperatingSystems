@@ -25,6 +25,7 @@ extern int  kv_store_write(const char *key, const char *value);
 extern char *kv_store_read(const char *key);
 extern char **kv_store_read_all(const char *key);
 extern void kv_delete_db();
+extern int hashFunction(char *key);
 
 /* if you write your own interface, please fill the following adaptor */
 //int    (*kv_store_create)(const char*)             = NULL;

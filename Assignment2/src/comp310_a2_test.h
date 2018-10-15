@@ -60,7 +60,8 @@ void generate_unique_data(char buf[], int length, char **keys_buf, int num_keys)
     if(counter > 1){
         generate_unique_data(buf, length, keys_buf, num_keys);
     }
-    return;
+
+    return ;
 }
 
 void generate_key(char buf[], int length, char **keys_buf, int num_keys){
