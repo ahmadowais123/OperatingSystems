@@ -48,6 +48,7 @@ unsigned long hashFunction(const char *key) {
 	return hash%256;
 }
 
+
 int kv_store_write(const char *key, const char *value) {
 	int index = hashFunction(key);
 
@@ -89,29 +90,58 @@ char *kv_store_read(const char *key) {
     return NULL;
 };
 
+//char **kv_store_read_all(const char *key) {
+//    char **allStrings = malloc(sizeof(char*));
+//    char *nextValue;
+//
+//    int count = 0;
+//    int index = hashFunction(key);
+//    size_t podOffset = podSize * index;
+//
+//    for(int i=0; i<256; i++) {
+//        size_t pairOffset = i*pairSize;
+//
+//        if(strcmp(memory+sizeof(data)+podOffset+pairOffset, "") == 0) {
+//            if(i == 0) return NULL;
+//            free(allStrings[count]);
+//            allStrings[count] = NULL;
+//            return allStrings;
+//        } else if(strcmp(memory+sizeof(data)+podOffset+pairOffset, key) == 0) {
+//            nextValue = strdup(memory + sizeof(data) + podOffset + pairOffset + keySize);
+//            allStrings[count] = nextValue;
+//            count++;
+//            allStrings = realloc(allStrings, sizeof(char*)*(count+1));
+//        }
+//    }
+//	allStrings[count] = NULL;
+//    return allStrings;
+//}
+
 char **kv_store_read_all(const char *key) {
     char **allStrings = malloc(sizeof(char*));
     char *nextValue;
 
+    data *bookKeeping = (data *)memory;
+
     int count = 0;
     int index = hashFunction(key);
-    size_t podOffset = podSize * index;
+	int currentReadPointer = bookKeeping->readCounters[index];
+	size_t podOffset = podSize * index;
 
     for(int i=0; i<256; i++) {
-        size_t pairOffset = i*pairSize;
-
+        size_t pairOffset = currentReadPointer*pairSize;
+		currentReadPointer++;
+		currentReadPointer %= 256;
         if(strcmp(memory+sizeof(data)+podOffset+pairOffset, "") == 0) {
             if(i == 0) return NULL;
-            free(allStrings[count]);
-            allStrings[count] = NULL;
-            return allStrings;
         } else if(strcmp(memory+sizeof(data)+podOffset+pairOffset, key) == 0) {
-            nextValue = strdup(memory + sizeof(data) + podOffset + pairOffset + keySize);
-            allStrings[count] = nextValue;
-            count++;
-            allStrings = realloc(allStrings, sizeof(char*)*(count+1));
+			count++;
+			allStrings = realloc(allStrings, sizeof(char*)*(count+1));
+			nextValue = strdup(memory + sizeof(data) + podOffset + pairOffset + keySize);
+			allStrings[count-1] = nextValue;
         }
     }
+//    free(allStrings[count]);
 	allStrings[count] = NULL;
     return allStrings;
 }
