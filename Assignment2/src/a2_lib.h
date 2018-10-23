@@ -24,6 +24,7 @@ typedef struct {
 typedef struct {
     int writeCounters[256];
     int readCounters[256];
+    int initialized;
 }data;
 
 

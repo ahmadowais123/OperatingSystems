@@ -28,9 +28,12 @@ int kv_store_create(const char *name) {
 
 
 	data *bookKeeping = (data *)memory;
-	for(int i=0; i<256; i++) {
-		bookKeeping->writeCounters[i] = 0;
-		bookKeeping->readCounters[i] = 0;
+	if(bookKeeping->initialized == 0) {
+		for(int i=0; i<256; i++) {
+			bookKeeping->writeCounters[i] = 0;
+			bookKeeping->readCounters[i] = 0;
+		}
+		bookKeeping->initialized = 1;
 	}
 
 	return 0;
@@ -141,7 +144,7 @@ char **kv_store_read_all(const char *key) {
 			allStrings[count-1] = nextValue;
         }
     }
-//    free(allStrings[count]);
+
 	allStrings[count] = NULL;
     return allStrings;
 }
