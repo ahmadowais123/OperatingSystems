@@ -1,11 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <string.h>
-#include <math.h>
 #include "a2_lib.h"
 
 int kv_store_create(const char *name) {
@@ -26,6 +18,9 @@ int kv_store_create(const char *name) {
 		exit(1);
 	}
 
+	mutex = sem_open("mutex", O_CREAT, S_IRWXU, 1);
+	sem_read = sem_open("sem_read", O_CREAT, S_IRWXU, 1);
+
 
 	data *bookKeeping = (data *)memory;
 	if(bookKeeping->initialized == 0) {
@@ -34,6 +29,7 @@ int kv_store_create(const char *name) {
 			bookKeeping->readCounters[i] = 0;
 		}
 		bookKeeping->initialized = 1;
+		bookKeeping->readCounter = 0;
 	}
 
 	return 0;
@@ -53,12 +49,13 @@ unsigned long hashFunction(const char *key) {
 
 
 int kv_store_write(const char *key, const char *value) {
+
+	sem_wait(mutex);
 	int index = hashFunction(key);
 
 	data *bookKeeping = (data *)memory;
 	size_t pairOffset = pairSize * bookKeeping->writeCounters[index];
 	size_t podOffset = podSize*index;
-
 
 	memcpy(memory+sizeof(data)+podOffset+pairOffset, key, keySize);
 	memcpy(memory+sizeof(data)+podOffset+pairOffset+keySize, value, valueSize);
@@ -66,14 +63,25 @@ int kv_store_write(const char *key, const char *value) {
 	bookKeeping->writeCounters[index]++;
 	bookKeeping->writeCounters[index] = bookKeeping->writeCounters[index]%numberPods;
 
+	sem_post(mutex);
+
 	return 0;
 }
 
 char *kv_store_read(const char *key) {
-    int index = hashFunction(key);
-    char *duplicateValue;
 
-    data *bookKeeping = (data *)memory;
+	sem_wait(sem_read);
+	data *bookKeeping = (data *)memory;
+	bookKeeping->readCounter++;
+	int rc = bookKeeping->readCounter;
+	if(rc == 1) {
+		sem_wait(mutex);
+	}
+	sem_post(sem_read);
+
+	int index = hashFunction(key);
+	char *duplicateValue;
+
     size_t podOffset = podSize*index;
 
     for(int i=0;i<256;i++) {
@@ -83,6 +91,15 @@ char *kv_store_read(const char *key) {
             duplicateValue = strdup(memory + sizeof(data) + podOffset + pairOffset + keySize);
             bookKeeping->readCounters[index]++;
             bookKeeping->readCounters[index] = bookKeeping->readCounters[index]%256;
+
+            sem_wait(sem_read);
+            bookKeeping->readCounter--;
+            rc = bookKeeping->readCounter;
+            if(rc == 0) {
+            	sem_post(mutex);
+            }
+            sem_post(sem_read);
+
             return duplicateValue;
         }
 
@@ -90,6 +107,13 @@ char *kv_store_read(const char *key) {
         bookKeeping->readCounters[index] = bookKeeping->readCounters[index]%256;
     }
 
+	sem_wait(sem_read);
+	bookKeeping->readCounter--;
+	rc = bookKeeping->readCounter;
+	if(rc == 0) {
+		sem_post(mutex);
+	}
+	sem_post(sem_read);
     return NULL;
 };
 
@@ -121,10 +145,17 @@ char *kv_store_read(const char *key) {
 //}
 
 char **kv_store_read_all(const char *key) {
+	sem_wait(sem_read);
+	data *bookKeeping = (data *)memory;
+	bookKeeping->readCounter++;
+	int rc = bookKeeping->readCounter;
+	if(rc == 1) {
+		sem_wait(mutex);
+	}
+	sem_post(sem_read);
+
     char **allStrings = malloc(sizeof(char*));
     char *nextValue;
-
-    data *bookKeeping = (data *)memory;
 
     int count = 0;
     int index = hashFunction(key);
@@ -135,9 +166,8 @@ char **kv_store_read_all(const char *key) {
         size_t pairOffset = currentReadPointer*pairSize;
 		currentReadPointer++;
 		currentReadPointer %= 256;
-        if(strcmp(memory+sizeof(data)+podOffset+pairOffset, "") == 0) {
-            if(i == 0) return NULL;
-        } else if(strcmp(memory+sizeof(data)+podOffset+pairOffset, key) == 0) {
+
+        if(strcmp(memory+sizeof(data)+podOffset+pairOffset, key) == 0) {
 			count++;
 			allStrings = realloc(allStrings, sizeof(char*)*(count+1));
 			nextValue = strdup(memory + sizeof(data) + podOffset + pairOffset + keySize);
@@ -145,12 +175,22 @@ char **kv_store_read_all(const char *key) {
         }
     }
 
+	sem_wait(sem_read);
+	bookKeeping->readCounter--;
+	rc = bookKeeping->readCounter;
+	if(rc == 0) {
+		sem_post(mutex);
+	}
+	sem_post(sem_read);
 	allStrings[count] = NULL;
+	if(count == 0) return NULL;
     return allStrings;
 }
 
 void kv_delete_db() {
 	long size = sizeof(data) + (numberPods*podSize);
+	sem_unlink("mutex");
+	sem_unlink("sem_read");
 	if(munmap(memory, size) == -1){
 		perror("Failed to delete database");
 		exit(1);

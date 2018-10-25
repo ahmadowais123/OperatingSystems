@@ -1,9 +1,16 @@
 #ifndef __COMP310_ASSIGNMENT2_TEST_CASE_CONFIG__
 #define __COMP310_ASSIGNMENT2_TEST_CASE_CONFIG__
 
+#include <stdio.h>
 #include <stdlib.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <string.h>
+#include <math.h>
+#include <semaphore.h>
 
-#define DATA_BASE_NAME   "database"
 #define KEY_MAX_LENGTH   32
 #define VALUE_MAX_LENGTH 256
 
@@ -16,6 +23,10 @@
 char *memory;
 int fd;
 
+sem_t *mutex;
+sem_t *sem_read;
+
+
 typedef struct {
     char key[KEY_MAX_LENGTH];
     char value[VALUE_MAX_LENGTH];
@@ -25,6 +36,7 @@ typedef struct {
     int writeCounters[256];
     int readCounters[256];
     int initialized;
+    int readCounter;
 }data;
 
 
