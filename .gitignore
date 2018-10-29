@@ -1,6 +1,7 @@
 *
 !*.*
 !*/
+!*/Makefile
 */cmake-build-debug/
 Assignment2/src/cmake-build-debug/*
 .idea

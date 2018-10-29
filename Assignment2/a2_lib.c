@@ -1,14 +1,23 @@
 #include "a2_lib.h"
 
+/**
+ * Creates a shared memory object and maps it to memory
+ * Initializes semaphores for synchronization and bookkeeping
+ * information for reading and writing to the kv store
+ * @param name Name of shared memory object
+ * @return 0 on success, -1 on failure
+ */
 int kv_store_create(const char *name) {
-	fd = shm_open(name, O_RDWR | O_CREAT, S_IRWXU);
+	databaseName = malloc(sizeof(char)*strlen(name));
+	strcpy(databaseName, name);
+	fd = shm_open(databaseName, O_RDWR | O_CREAT, S_IRWXU);
 
 	if(fd == -1) {
 		perror("Error creating shared memory object.");
 		return -1;
 	}
 
-	size_t size = sizeof(data) + (numberPods*numberPods*pairSize);
+	size_t size = sizeof(data) + (NUMBER_OF_PODS*NUMBER_OF_PODS*SIZE_OF_KV_PAIR);
 	ftruncate(fd, size);
 	memory = (char *)mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	close(fd);
@@ -35,6 +44,11 @@ int kv_store_create(const char *name) {
 	return 0;
 }
 
+/**
+ * This function maps a string to an index in the kvstore
+ * @param key used for mapping
+ * @return index of pod
+ */
 unsigned long hashFunction(const char *key) {
 	unsigned long hash = 5381;
 	int c;
@@ -47,27 +61,38 @@ unsigned long hashFunction(const char *key) {
 	return hash%256;
 }
 
-
+/**
+ * This method writes a key value pair to the store in the next available spot
+ * in its respective pod
+ * @param key
+ * @param value
+ * @return
+ */
 int kv_store_write(const char *key, const char *value) {
 
 	sem_wait(mutex);
 	int index = hashFunction(key);
 
 	data *bookKeeping = (data *)memory;
-	size_t pairOffset = pairSize * bookKeeping->writeCounters[index];
-	size_t podOffset = podSize*index;
+	size_t pairOffset = SIZE_OF_KV_PAIR * bookKeeping->writeCounters[index];
+	size_t podOffset = SIZE_OF_POD*index;
 
-	memcpy(memory+sizeof(data)+podOffset+pairOffset, key, keySize);
-	memcpy(memory+sizeof(data)+podOffset+pairOffset+keySize, value, valueSize);
+	memcpy(memory+sizeof(data)+podOffset+pairOffset, key, KEY_MAX_LENGTH);
+	memcpy(memory+sizeof(data)+podOffset+pairOffset+KEY_MAX_LENGTH, value, VALUE_MAX_LENGTH);
 
 	bookKeeping->writeCounters[index]++;
-	bookKeeping->writeCounters[index] = bookKeeping->writeCounters[index]%numberPods;
+	bookKeeping->writeCounters[index] = bookKeeping->writeCounters[index]%NUMBER_OF_PODS;
 
 	sem_post(mutex);
 
 	return 0;
 }
 
+/**
+ * This method reads the next value corresponding to the key
+ * @param key
+ * @return
+ */
 char *kv_store_read(const char *key) {
 
 	sem_wait(sem_read);
@@ -82,13 +107,13 @@ char *kv_store_read(const char *key) {
 	int index = hashFunction(key);
 	char *duplicateValue;
 
-    size_t podOffset = podSize*index;
+    size_t podOffset = SIZE_OF_POD*index;
 
     for(int i=0;i<256;i++) {
-        size_t pairOffset = pairSize*bookKeeping->readCounters[index];
+        size_t pairOffset = SIZE_OF_KV_PAIR*bookKeeping->readCounters[index];
 
         if(memcmp(memory + sizeof(data) + podOffset + pairOffset, key, strlen(key)) == 0) {
-            duplicateValue = strdup(memory + sizeof(data) + podOffset + pairOffset + keySize);
+            duplicateValue = strdup(memory + sizeof(data) + podOffset + pairOffset + KEY_MAX_LENGTH);
             bookKeeping->readCounters[index]++;
             bookKeeping->readCounters[index] = bookKeeping->readCounters[index]%256;
 
@@ -117,33 +142,11 @@ char *kv_store_read(const char *key) {
     return NULL;
 };
 
-//char **kv_store_read_all(const char *key) {
-//    char **allStrings = malloc(sizeof(char*));
-//    char *nextValue;
-//
-//    int count = 0;
-//    int index = hashFunction(key);
-//    size_t podOffset = podSize * index;
-//
-//    for(int i=0; i<256; i++) {
-//        size_t pairOffset = i*pairSize;
-//
-//        if(strcmp(memory+sizeof(data)+podOffset+pairOffset, "") == 0) {
-//            if(i == 0) return NULL;
-//            free(allStrings[count]);
-//            allStrings[count] = NULL;
-//            return allStrings;
-//        } else if(strcmp(memory+sizeof(data)+podOffset+pairOffset, key) == 0) {
-//            nextValue = strdup(memory + sizeof(data) + podOffset + pairOffset + keySize);
-//            allStrings[count] = nextValue;
-//            count++;
-//            allStrings = realloc(allStrings, sizeof(char*)*(count+1));
-//        }
-//    }
-//	allStrings[count] = NULL;
-//    return allStrings;
-//}
-
+/**
+ * This method reads all the values associated with a particular key
+ * @param key
+ * @return
+ */
 char **kv_store_read_all(const char *key) {
 	sem_wait(sem_read);
 	data *bookKeeping = (data *)memory;
@@ -160,17 +163,17 @@ char **kv_store_read_all(const char *key) {
     int count = 0;
     int index = hashFunction(key);
 	int currentReadPointer = bookKeeping->readCounters[index];
-	size_t podOffset = podSize * index;
+	size_t podOffset = SIZE_OF_POD * index;
 
     for(int i=0; i<256; i++) {
-        size_t pairOffset = currentReadPointer*pairSize;
+        size_t pairOffset = currentReadPointer*SIZE_OF_KV_PAIR;
 		currentReadPointer++;
 		currentReadPointer %= 256;
 
         if(strcmp(memory+sizeof(data)+podOffset+pairOffset, key) == 0) {
 			count++;
 			allStrings = realloc(allStrings, sizeof(char*)*(count+1));
-			nextValue = strdup(memory + sizeof(data) + podOffset + pairOffset + keySize);
+			nextValue = strdup(memory + sizeof(data) + podOffset + pairOffset + KEY_MAX_LENGTH);
 			allStrings[count-1] = nextValue;
         }
     }
@@ -187,12 +190,17 @@ char **kv_store_read_all(const char *key) {
     return allStrings;
 }
 
+/**
+ * Delete the shared memory object
+ */
 void kv_delete_db() {
-	long size = sizeof(data) + (numberPods*podSize);
+	long size = sizeof(data) + (NUMBER_OF_PODS*SIZE_OF_POD);
 	sem_unlink("mutex");
 	sem_unlink("sem_read");
 	if(munmap(memory, size) == -1){
 		perror("Failed to delete database");
 		exit(1);
-	}
+	};
+	shm_unlink(databaseName);
+	free(databaseName);
 }

@@ -38,6 +38,7 @@ void read_eval() {
         if (strcmp(cmd[0], "exit") == 0) {
             free(buffer_to_free);
             free(cmd);
+            kv_delete_db();
             return;
         } else if (strcmp(cmd[0], "create") == 0) {
             printf("exec code = %d\n", kv_store_create(cmd[1]));
