@@ -16,22 +16,25 @@
 #define SIZE_OF_KV_PAIR 288
 #define SIZE_OF_POD 73728
 
+//Global Variables
 char *memory;
 char *databaseName;
 int fd;
 
-sem_t *mutex;
-sem_t *sem_read;
+//Semaphores
+sem_t *writeLock;
+sem_t *readLock;
 
+//Bookkeeping struct
 typedef struct {
     int writeCounters[256];
     int readCounters[256];
-    int initialized;
-    int readCounter;
+    int isInitialized;
+    int readers;
 }data;
 
 
-/* if you use the default interface uncomment below */
+/* Method Prototypes */
 extern int  kv_store_create(const char *name);
 extern int  kv_store_write(const char *key, const char *value);
 extern char *kv_store_read(const char *key);

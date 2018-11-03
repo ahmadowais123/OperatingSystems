@@ -10,6 +10,8 @@
 int kv_store_create(const char *name) {
 	databaseName = malloc(sizeof(char)*strlen(name));
 	strcpy(databaseName, name);
+	
+	//Create shared memory object
 	fd = shm_open(databaseName, O_RDWR | O_CREAT, S_IRWXU);
 
 	if(fd == -1) {
@@ -17,6 +19,7 @@ int kv_store_create(const char *name) {
 		return -1;
 	}
 
+	//Map memory to the share memory object
 	size_t size = sizeof(data) + (NUMBER_OF_PODS*NUMBER_OF_PODS*SIZE_OF_KV_PAIR);
 	ftruncate(fd, size);
 	memory = (char *)mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
@@ -27,18 +30,20 @@ int kv_store_create(const char *name) {
 		exit(1);
 	}
 
-	mutex = sem_open("mutex", O_CREAT, S_IRWXU, 1);
-	sem_read = sem_open("sem_read", O_CREAT, S_IRWXU, 1);
+	//Initiate semaphores
+	writeLock = sem_open("writeLock", O_CREAT, S_IRWXU, 1);
+	readLock = sem_open("readLock", O_CREAT, S_IRWXU, 1);
 
 
+	//Initialize book keeping information
 	data *bookKeeping = (data *)memory;
-	if(bookKeeping->initialized == 0) {
+	if(bookKeeping->isInitialized == 0) {
 		for(int i=0; i<256; i++) {
 			bookKeeping->writeCounters[i] = 0;
 			bookKeeping->readCounters[i] = 0;
 		}
-		bookKeeping->initialized = 1;
-		bookKeeping->readCounter = 0;
+		bookKeeping->isInitialized = 1;
+		bookKeeping->readers = 0;
 	}
 
 	return 0;
@@ -70,20 +75,25 @@ unsigned long hashFunction(const char *key) {
  */
 int kv_store_write(const char *key, const char *value) {
 
-	sem_wait(mutex);
+    //Obtain write lock
+	sem_wait(writeLock);
 	int index = hashFunction(key);
 
+	//Calculate offset of position to write to
 	data *bookKeeping = (data *)memory;
 	size_t pairOffset = SIZE_OF_KV_PAIR * bookKeeping->writeCounters[index];
 	size_t podOffset = SIZE_OF_POD*index;
 
+	//Write to the store
 	memcpy(memory+sizeof(data)+podOffset+pairOffset, key, KEY_MAX_LENGTH);
 	memcpy(memory+sizeof(data)+podOffset+pairOffset+KEY_MAX_LENGTH, value, VALUE_MAX_LENGTH);
 
+	//Update book keeping information
 	bookKeeping->writeCounters[index]++;
 	bookKeeping->writeCounters[index] = bookKeeping->writeCounters[index]%NUMBER_OF_PODS;
 
-	sem_post(mutex);
+	//Release write lock
+	sem_post(writeLock);
 
 	return 0;
 }
@@ -95,50 +105,62 @@ int kv_store_write(const char *key, const char *value) {
  */
 char *kv_store_read(const char *key) {
 
-	sem_wait(sem_read);
+    //Obtain read lock
+	sem_wait(readLock);
 	data *bookKeeping = (data *)memory;
-	bookKeeping->readCounter++;
-	int rc = bookKeeping->readCounter;
+	bookKeeping->readers++;
+	int rc = bookKeeping->readers;
+	//If first reader then also obtain write lock
 	if(rc == 1) {
-		sem_wait(mutex);
+		sem_wait(writeLock);
 	}
-	sem_post(sem_read);
+	//Release read lock
+	sem_post(readLock);
 
 	int index = hashFunction(key);
 	char *duplicateValue;
 
     size_t podOffset = SIZE_OF_POD*index;
 
+    //Iterate over the pod to look for desired key
     for(int i=0;i<256;i++) {
         size_t pairOffset = SIZE_OF_KV_PAIR*bookKeeping->readCounters[index];
 
+        //Compare input key with key in store
         if(memcmp(memory + sizeof(data) + podOffset + pairOffset, key, strlen(key)) == 0) {
+            //Make duplicate of value and return
             duplicateValue = strdup(memory + sizeof(data) + podOffset + pairOffset + KEY_MAX_LENGTH);
-            bookKeeping->readCounters[index]++;
-            bookKeeping->readCounters[index] = bookKeeping->readCounters[index]%256;
+			//Obtain read lock and update book keeping information
+            sem_wait(readLock);
+			bookKeeping->readCounters[index]++;
+			bookKeeping->readCounters[index] = bookKeeping->readCounters[index]%256;
 
-            sem_wait(sem_read);
-            bookKeeping->readCounter--;
-            rc = bookKeeping->readCounter;
+            bookKeeping->readers--;
+            rc = bookKeeping->readers;
+            //If last reader then release write lock
             if(rc == 0) {
-            	sem_post(mutex);
+            	sem_post(writeLock);
             }
-            sem_post(sem_read);
+            sem_post(readLock);
 
             return duplicateValue;
         }
 
+        //Obtain read lock to update book keeping information
+		sem_wait(readLock);
         bookKeeping->readCounters[index]++;
         bookKeeping->readCounters[index] = bookKeeping->readCounters[index]%256;
+		sem_post(readLock);
     }
 
-	sem_wait(sem_read);
-	bookKeeping->readCounter--;
-	rc = bookKeeping->readCounter;
+    //No value found for input key so return null
+	sem_wait(readLock);
+	bookKeeping->readers--;
+	rc = bookKeeping->readers;
 	if(rc == 0) {
-		sem_post(mutex);
+		sem_post(writeLock);
 	}
-	sem_post(sem_read);
+	sem_post(readLock);
     return NULL;
 };
 
@@ -148,14 +170,16 @@ char *kv_store_read(const char *key) {
  * @return
  */
 char **kv_store_read_all(const char *key) {
-	sem_wait(sem_read);
+    //Obtain read lock
+	sem_wait(readLock);
 	data *bookKeeping = (data *)memory;
-	bookKeeping->readCounter++;
-	int rc = bookKeeping->readCounter;
+	bookKeeping->readers++;
+	int rc = bookKeeping->readers;
+	//If first reader obtain write lock as well
 	if(rc == 1) {
-		sem_wait(mutex);
+		sem_wait(writeLock);
 	}
-	sem_post(sem_read);
+	sem_post(readLock);
 
     char **allStrings = malloc(sizeof(char*));
     char *nextValue;
@@ -165,6 +189,7 @@ char **kv_store_read_all(const char *key) {
 	int currentReadPointer = bookKeeping->readCounters[index];
 	size_t podOffset = SIZE_OF_POD * index;
 
+	//Iterate through pod and copy all values corresponding to the input key
     for(int i=0; i<256; i++) {
         size_t pairOffset = currentReadPointer*SIZE_OF_KV_PAIR;
 		currentReadPointer++;
@@ -178,13 +203,13 @@ char **kv_store_read_all(const char *key) {
         }
     }
 
-	sem_wait(sem_read);
-	bookKeeping->readCounter--;
-	rc = bookKeeping->readCounter;
+	sem_wait(readLock);
+	bookKeeping->readers--;
+	rc = bookKeeping->readers;
 	if(rc == 0) {
-		sem_post(mutex);
+		sem_post(writeLock);
 	}
-	sem_post(sem_read);
+	sem_post(readLock);
 	allStrings[count] = NULL;
 	if(count == 0) return NULL;
     return allStrings;
@@ -195,8 +220,8 @@ char **kv_store_read_all(const char *key) {
  */
 void kv_delete_db() {
 	long size = sizeof(data) + (NUMBER_OF_PODS*SIZE_OF_POD);
-	sem_unlink("mutex");
-	sem_unlink("sem_read");
+	sem_unlink("writeLock");
+	sem_unlink("readLock");
 	if(munmap(memory, size) == -1){
 		perror("Failed to delete database");
 		exit(1);
