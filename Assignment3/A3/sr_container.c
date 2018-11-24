@@ -29,7 +29,7 @@ struct cgroup_setting self_to_task = {
  *      in the comments for the main() below
  *  ------------------------------------------------------
  **/ 
-struct cgroups_control *cgroups[5] = {
+struct cgroups_control *cgroups[6] = {
 	& (struct cgroups_control) {
 		.control = CGRP_BLKIO_CONTROL,
 		.settings = (struct cgroup_setting *[]) {
@@ -45,6 +45,21 @@ struct cgroups_control *cgroups[5] = {
 			NULL                       // NULL at the end of the array
 		}
 	},
+    & (struct cgroups_control) {
+        .control = CGRP_CPU_SET_CONTROL,
+        .settings = (struct cgroup_setting *[]) {
+                & (struct cgroup_setting) {
+                        .name = "cpuset.cpus",
+                        .value = CPUS
+                },
+                & (struct cgroup_setting) {
+                        .name = "cpuset.mems",
+                        .value = "0"
+                },
+                &self_to_task,             // must be added to all the new controls added
+                NULL                       // NULL at the end of the array
+        }
+    },
     & (struct cgroups_control) {
             .control = CGRP_PIDS_CONTROL,
             .settings = (struct cgroup_setting *[]) {
@@ -68,17 +83,6 @@ struct cgroups_control *cgroups[5] = {
             }
     },
     & (struct cgroups_control) {
-            .control = CGRP_CPU_SET_CONTROL,
-            .settings = (struct cgroup_setting *[]) {
-                    & (struct cgroup_setting) {
-                            .name = "cpuset.cpus",
-                            .value = CPUS
-                    },
-                    &self_to_task,             // must be added to all the new controls added
-                    NULL                       // NULL at the end of the array
-            }
-    },
-    & (struct cgroups_control) {
             .control = CGRP_MEMORY_CONTROL,
             .settings = (struct cgroup_setting *[]) {
                     & (struct cgroup_setting) {
@@ -88,7 +92,8 @@ struct cgroups_control *cgroups[5] = {
                     &self_to_task,             // must be added to all the new controls added
                     NULL                       // NULL at the end of the array
             }
-    }// NULL at the end of the array
+    },
+    NULL// NULL at the end of the array
 };
 
 
@@ -118,6 +123,7 @@ int main(int argc, char **argv)
 {
     struct child_config config = {0};
     void *stack, *stackTop;
+    char temp[256];
     int option = 0;
     int sockets[2] = {0};
     pid_t child_pid = 0;
@@ -147,22 +153,28 @@ int main(int argc, char **argv)
                 found_cflag = true;
                 break;
             case 'C':
-                strcpy(cgroups[2]->settings[0]->value, optarg);
-                break;
-            case 's':
                 strcpy(cgroups[3]->settings[0]->value, optarg);
                 break;
-            case 'p':
+            case 's':
                 strcpy(cgroups[1]->settings[0]->value, optarg);
+                break;
+            case 'p':
+                strcpy(cgroups[2]->settings[0]->value, optarg);
                 break;
             case 'M':
                 strcpy(cgroups[4]->settings[0]->value, optarg);
                 break;
             case 'r':
-                strcpy(cgroups[0]->settings[0]->value, optarg);
+                strcat(temp, "8:0 ");
+                strcat(temp, optarg);
+                strcpy(cgroups[0]->settings[0]->value, temp);
+                memset(temp, 0, strlen(temp));
                 break;
             case 'w':
-                strcpy(cgroups[0]->settings[1]->value, optarg);
+                strcat(temp, "8:0 ");
+                strcat(temp, optarg);
+                strcpy(cgroups[0]->settings[1]->value, temp);
+                memset(temp, 0, strlen(temp));
                 break;
             case 'H':
                 config.hostname = optarg;
@@ -249,18 +261,18 @@ int main(int argc, char **argv)
      * ------------------------------------------------------
      **/
 
-        // You code for clone() goes here
-        stack = malloc(STACK_SIZE);
-        if(stack == NULL) {
-            perror("Failed to allocate memory for the stack.");
-            clean_child_structures(&config, cgroups, NULL);
-            cleanup_sockets(sockets);
-            return EXIT_FAILURE;
-        }
-        stackTop = stack + STACK_SIZE;
+    // You code for clone() goes here
+    stack = malloc(STACK_SIZE);
+    if(stack == NULL) {
+        perror("Failed to allocate memory for the stack.");
+        clean_child_structures(&config, cgroups, NULL);
+        cleanup_sockets(sockets);
+        return EXIT_FAILURE;
+    }
+    stackTop = stack + STACK_SIZE;
 
-        int flags = 0;
-        child_pid = clone(child_function, stackTop, flags, &config);
+    int flags = CLONE_NEWNET | CLONE_NEWCGROUP | CLONE_NEWIPC | CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWPID | SIGCHLD;
+    child_pid = clone(child_function, stackTop, flags, &config);
 
     /**
      *  ------------------------------------------------------
