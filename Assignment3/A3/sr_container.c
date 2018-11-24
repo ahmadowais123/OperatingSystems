@@ -34,58 +34,61 @@ struct cgroups_control *cgroups[5] = {
 		.control = CGRP_BLKIO_CONTROL,
 		.settings = (struct cgroup_setting *[]) {
 			& (struct cgroup_setting) {
-				.name = "blkio.weight",
-				.value = "64"
+				.name = "blkio.throttle.read_bps_device",
+				.value = READ_BYTES
 			},
+            & (struct cgroup_setting) {
+                    .name = "blkio.throttle.write_bps_device",
+                    .value = WRITE_BYTES
+            },
 			&self_to_task,             // must be added to all the new controls added
 			NULL                       // NULL at the end of the array
 		}
 	},
     & (struct cgroups_control) {
-            .control = ,
+            .control = CGRP_PIDS_CONTROL,
             .settings = (struct cgroup_setting *[]) {
                     & (struct cgroup_setting) {
-                            .name = ,
-                            .value =
+                            .name = "pids.max",
+                            .value = PIDS
                     },
                     &self_to_task,             // must be added to all the new controls added
                     NULL                       // NULL at the end of the array
             }
     },
     & (struct cgroups_control) {
-            .control = ,
+            .control = CGRP_CPU_CONTROL,
             .settings = (struct cgroup_setting *[]) {
                     & (struct cgroup_setting) {
-                            .name = ,
-                            .value =
+                            .name = "cpu.shares",
+                            .value = CPU_SHARES
                     },
                     &self_to_task,             // must be added to all the new controls added
                     NULL                       // NULL at the end of the array
             }
     },
     & (struct cgroups_control) {
-            .control = ,
+            .control = CGRP_CPU_SET_CONTROL,
             .settings = (struct cgroup_setting *[]) {
                     & (struct cgroup_setting) {
-                            .name = ,
-                            .value =
+                            .name = "cpuset.cpus",
+                            .value = CPUS
                     },
                     &self_to_task,             // must be added to all the new controls added
                     NULL                       // NULL at the end of the array
             }
     },
     & (struct cgroups_control) {
-            .control = ,
+            .control = CGRP_MEMORY_CONTROL,
             .settings = (struct cgroup_setting *[]) {
                     & (struct cgroup_setting) {
-                            .name = ,
-                            .value =
+                            .name = "memory.limit_in_bytes",
+                            .value = MEMORY
                     },
                     &self_to_task,             // must be added to all the new controls added
                     NULL                       // NULL at the end of the array
             }
-    },
-	NULL                               // NULL at the end of the array
+    }// NULL at the end of the array
 };
 
 
@@ -97,13 +100,13 @@ struct cgroups_control *cgroups[5] = {
  *          3. c : The initial process to run inside the container
  *  
  *   You must extend it to support the following flags:
- *          1. C : The cpu shares weight to be set (cpu-cgroup controller)
- *          2. s : The cpu cores to which the container must be restricted (cpuset-cgroup controller)
- *          3. p : The max number of process's allowed within a container (pid-cgroup controller)
- *          4. M : The memory consuption allowed in the container (memory-cgroup controller)
- *          5. r : The read IO rate in bytes (blkio-cgroup controller)
- *          6. w : The write IO rate in bytes (blkio-cgroup controller)
- *          7. H : The hostname of the container 
+ *          1. C : The cpu shares weight to be set (cpu-cgroup controller)                              DONE
+ *          2. s : The cpu cores to which the container must be restricted (cpuset-cgroup controller)   DONE
+ *          3. p : The max number of process's allowed within a container (pid-cgroup controller)       DONE
+ *          4. M : The memory consumption allowed in the container (memory-cgroup controller)           DONE
+ *          5. r : The read IO rate in bytes (blkio-cgroup controller)                                  DONE
+ *          6. w : The write IO rate in bytes (blkio-cgroup controller)                                 DONE
+ *          7. H : The hostname of the container                                                        DONE
  * 
  *   You can follow the current method followed to take in these flags and extend it.
  *   Note that the current implementation necessitates the "-c" flag to be the last one.
@@ -120,32 +123,53 @@ int main(int argc, char **argv)
     pid_t child_pid = 0;
     int last_optind = 0;
     bool found_cflag = false;
-    while ((option = getopt(argc, argv, "c:m:u:")))
+    while ((option = getopt(argc, argv, "m:u:c:C:s:p:M:r:w:H:")))
     {
         if (found_cflag)
             break;
 
         switch (option)
         {
-        case 'c':
-            config.argc = argc - last_optind - 1;
-            config.argv = &argv[argc - config.argc];
-            found_cflag = true;
-            break;
-        case 'm':
-            config.mount_dir = optarg;
-            break;
-        case 'u':
-            if (sscanf(optarg, "%d", &config.uid) != 1)
-            {
-                fprintf(stderr, "UID not as expected: %s\n", optarg);
+            case 'm':
+                config.mount_dir = optarg;
+                break;
+            case 'u':
+                if (sscanf(optarg, "%d", &config.uid) != 1)
+                {
+                    fprintf(stderr, "UID not as expected: %s\n", optarg);
+                    cleanup_stuff(argv, sockets);
+                    return EXIT_FAILURE;
+                }
+                break;
+            case 'c':
+                config.argc = argc - last_optind - 1;
+                config.argv = &argv[argc - config.argc];
+                found_cflag = true;
+                break;
+            case 'C':
+                strcpy(cgroups[2]->settings[0]->value, optarg);
+                break;
+            case 's':
+                strcpy(cgroups[3]->settings[0]->value, optarg);
+                break;
+            case 'p':
+                strcpy(cgroups[1]->settings[0]->value, optarg);
+                break;
+            case 'M':
+                strcpy(cgroups[4]->settings[0]->value, optarg);
+                break;
+            case 'r':
+                strcpy(cgroups[0]->settings[0]->value, optarg);
+                break;
+            case 'w':
+                strcpy(cgroups[0]->settings[1]->value, optarg);
+                break;
+            case 'H':
+                config.hostname = optarg;
+                break;
+            default:
                 cleanup_stuff(argv, sockets);
                 return EXIT_FAILURE;
-            }
-            break;
-        default:
-            cleanup_stuff(argv, sockets);
-            return EXIT_FAILURE;
         }
         last_optind = optind;
     }

@@ -34,15 +34,19 @@
 #include <stdbool.h>
 
 #define ARCH_TYPE "x86_64"
-#define MEMORY "1073741824"         // default limit on the memory cgroup controller
+#define MEMORY "1073741824"         	// default limit on the memory cgroup controller
 #define CPU_SHARES "256"                // default shares limit on cpu cgroup controller
-#define PIDS "64"                   // default pids limit on the pid cgroup controller
-#define WEIGHT "10"                 // default weight limit on the block IO cgroup controller
-#define FD_COUNT 64                 // default FD_COUNT
-#define USERNS_OFFSET 10000         // default UID offset from the parent USER namespaces
-#define USERNS_COUNT 2000           // default users count in the new USER namespace
+#define PIDS "64"                   	// default pids limit on the pid cgroup controller
+#define WEIGHT "10"                 	// default weight limit on the block IO cgroup controller
+#define READ_BYTES "1048576"				// default read IO rate in bytes
+#define WRITE_BYTES "1048576"				// default write IO rate in bytes
+#define CPUS "0"							// default cpu core for container
+#define FD_COUNT 64                 	// default FD_COUNT
+#define USERNS_OFFSET 10000         	// default UID offset from the parent USER namespaces
+#define USERNS_COUNT 2000           	// default users count in the new USER namespace
 #define SCMP_FAIL SCMP_ACT_ERRNO(EPERM) // Seccomp rule to set errno to EPERM on matchin filter
-#define STACK_SIZE (1024 * 1024)    // Stack size for the cloned child
+#define STACK_SIZE (1024 * 1024)    	// Stack size for the cloned child
+
 
 
 /**
@@ -63,9 +67,9 @@ struct child_config
     int argc;
     uid_t uid;
     int fd;
-    char *hostname;
     char **argv;
     char *mount_dir;
+    char *hostname;
 };
 
 /**
