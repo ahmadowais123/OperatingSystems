@@ -33,7 +33,6 @@
 #include <linux/limits.h>
 #include <stdbool.h>
 
-
 #define ARCH_TYPE "x86_64"
 #define MEMORY "1073741824"         // default limit on the memory cgroup controller
 #define CPU_SHARES "256"                // default shares limit on cpu cgroup controller

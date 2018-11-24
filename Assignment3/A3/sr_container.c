@@ -41,6 +41,50 @@ struct cgroups_control *cgroups[5] = {
 			NULL                       // NULL at the end of the array
 		}
 	},
+    & (struct cgroups_control) {
+            .control = ,
+            .settings = (struct cgroup_setting *[]) {
+                    & (struct cgroup_setting) {
+                            .name = ,
+                            .value =
+                    },
+                    &self_to_task,             // must be added to all the new controls added
+                    NULL                       // NULL at the end of the array
+            }
+    },
+    & (struct cgroups_control) {
+            .control = ,
+            .settings = (struct cgroup_setting *[]) {
+                    & (struct cgroup_setting) {
+                            .name = ,
+                            .value =
+                    },
+                    &self_to_task,             // must be added to all the new controls added
+                    NULL                       // NULL at the end of the array
+            }
+    },
+    & (struct cgroups_control) {
+            .control = ,
+            .settings = (struct cgroup_setting *[]) {
+                    & (struct cgroup_setting) {
+                            .name = ,
+                            .value =
+                    },
+                    &self_to_task,             // must be added to all the new controls added
+                    NULL                       // NULL at the end of the array
+            }
+    },
+    & (struct cgroups_control) {
+            .control = ,
+            .settings = (struct cgroup_setting *[]) {
+                    & (struct cgroup_setting) {
+                            .name = ,
+                            .value =
+                    },
+                    &self_to_task,             // must be added to all the new controls added
+                    NULL                       // NULL at the end of the array
+            }
+    },
 	NULL                               // NULL at the end of the array
 };
 
@@ -70,6 +114,7 @@ struct cgroups_control *cgroups[5] = {
 int main(int argc, char **argv)
 {
     struct child_config config = {0};
+    void *stack, *stackTop;
     int option = 0;
     int sockets[2] = {0};
     pid_t child_pid = 0;
@@ -181,6 +226,17 @@ int main(int argc, char **argv)
      **/
 
         // You code for clone() goes here
+        stack = malloc(STACK_SIZE);
+        if(stack == NULL) {
+            perror("Failed to allocate memory for the stack.");
+            clean_child_structures(&config, cgroups, NULL);
+            cleanup_sockets(sockets);
+            return EXIT_FAILURE;
+        }
+        stackTop = stack + STACK_SIZE;
+
+        int flags = 0;
+        child_pid = clone(child_function, stackTop, flags, &config);
 
     /**
      *  ------------------------------------------------------
