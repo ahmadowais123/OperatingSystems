@@ -87,11 +87,128 @@ int setup_child_capabilities()
 /**
  * ------------------------ TODO ------------------------
  *      This method is for restricting system_calls from within the container
- *      Complete this method as described in the assingment handout to restrict a list of system calls
+ *      Complete this method as described in the assignment handout to restrict a list of system calls
  * ------------------------------------------------------
  **/ 
 int setup_syscall_filters()
 {
+    fprintf(stderr, "####### > Setting up system call filters...");
+    int filter_set_status = -1;
+
+    scmp_filter_ctx  seccomp_ctx = seccomp_init(SCMP_ACT_ALLOW);
+    if(!seccomp_ctx) {
+        fprintf(stderr, "seccomp initialization failed: %m\n");
+        return EXIT_FAILURE;
+    }
+
+    filter_set_status = seccomp_rule_add(seccomp_ctx, SCMP_ACT_KILL, SCMP_SYS(move_pages), 0);
+    if(filter_set_status) {
+        if(seccomp_ctx) {
+            seccomp_release(seccomp_ctx);
+        }
+        fprintf(stderr, "seccomp could not add KILL rule for 'move_pages': %m\n");
+        return EXIT_FAILURE;
+    }
+
+    filter_set_status = seccomp_rule_add(seccomp_ctx, SCMP_ACT_KILL, SCMP_SYS(ptrace), 0);
+    if(filter_set_status) {
+        if(seccomp_ctx) {
+            seccomp_release(seccomp_ctx);
+        }
+        fprintf(stderr, "seccomp could not add KILL rule for 'ptrace': %m\n");
+        return EXIT_FAILURE;
+    }
+
+    filter_set_status = seccomp_rule_add(seccomp_ctx, SCMP_ACT_KILL, SCMP_SYS(migrate_pages), 0);
+    if(filter_set_status) {
+        if(seccomp_ctx) {
+            seccomp_release(seccomp_ctx);
+        }
+        fprintf(stderr, "seccomp could not add KILL rule for 'migrate_pages': %m\n");
+        return EXIT_FAILURE;
+    }
+
+    filter_set_status = seccomp_rule_add(seccomp_ctx, SCMP_ACT_KILL, SCMP_SYS(mbind), 0);
+    if(filter_set_status) {
+        if(seccomp_ctx) {
+            seccomp_release(seccomp_ctx);
+        }
+        fprintf(stderr, "seccomp could not add KILL rule for 'mbind': %m\n");
+        return EXIT_FAILURE;
+    }
+
+    filter_set_status = seccomp_rule_add(seccomp_ctx,
+            SCMP_ACT_KILL,
+            SCMP_SYS(unshare),
+            1,
+            SCMP_A0(SCMP_CMP_MASKED_EQ, CLONE_NEWUSER, CLONE_NEWUSER));
+    if(filter_set_status) {
+        if(seccomp_ctx) {
+            seccomp_release(seccomp_ctx);
+        }
+        fprintf(stderr, "seccomp could not add KILL rule for 'unshare': %m\n");
+        return EXIT_FAILURE;
+    }
+
+    filter_set_status = seccomp_rule_add(seccomp_ctx,
+            SCMP_ACT_KILL,
+            SCMP_SYS(clone),
+            1,
+            SCMP_A2(SCMP_CMP_MASKED_EQ, CLONE_NEWUSER, CLONE_NEWUSER));
+    if(filter_set_status) {
+        if(seccomp_ctx) {
+            seccomp_release(seccomp_ctx);
+        }
+        fprintf(stderr, "seccomp could not add KILL rule for 'clone': %m\n");
+        return EXIT_FAILURE;
+    }
+
+    filter_set_status = seccomp_rule_add(seccomp_ctx,
+            SCMP_ACT_KILL,
+            SCMP_SYS(chmod),
+            1,
+            SCMP_A1(SCMP_CMP_MASKED_EQ, S_ISUID, S_ISUID));
+    if(filter_set_status) {
+        if(seccomp_ctx) {
+            seccomp_release(seccomp_ctx);
+        }
+        fprintf(stderr, "seccomp could not add KILL rule for 'chmod': %m\n");
+        return EXIT_FAILURE;
+    }
+
+    filter_set_status = seccomp_rule_add(seccomp_ctx,
+            SCMP_ACT_KILL,
+            SCMP_SYS(chmod),
+            1,
+            SCMP_A1(SCMP_CMP_MASKED_EQ, S_ISGID, S_ISGID));
+    if(filter_set_status) {
+        if(seccomp_ctx) {
+            seccomp_release(seccomp_ctx);
+        }
+        fprintf(stderr, "seccomp could not add KILL rule for 'chmod': %m\n");
+        return EXIT_FAILURE;
+    }
+
+    filter_set_status = seccomp_attr_set(seccomp_ctx, SCMP_FLTATR_CTL_NNP, 0);
+    if(filter_set_status) {
+        if(seccomp_ctx) {
+            seccomp_release(seccomp_ctx);
+        }
+        fprintf(stderr, "seccomp could not set attribute 'SCMP_FLTATR_CTL_NNP': %m\n");
+        return EXIT_FAILURE;
+    }
+
+    filter_set_status = seccomp_load(seccomp_ctx);
+    if(filter_set_status) {
+        if(seccomp_ctx) {
+            seccomp_release(seccomp_ctx);
+        }
+        fprintf(stderr, "seccomp could not load the new context: %m\n");
+        return EXIT_FAILURE;
+    }
+
+    seccomp_release(seccomp_ctx);
+    fprintf(stderr, "Successful\n");
     return 0;
 }
 
