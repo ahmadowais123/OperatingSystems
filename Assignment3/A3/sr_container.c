@@ -28,74 +28,63 @@ struct cgroup_setting self_to_task = {
  *  You should fill this array with the additional controls from commandline flags as described 
  *      in the comments for the main() below
  *  ------------------------------------------------------
- **/ 
+ **/
 struct cgroups_control *cgroups[6] = {
-	& (struct cgroups_control) {
-		.control = CGRP_BLKIO_CONTROL,
-		.settings = (struct cgroup_setting *[]) {
-			& (struct cgroup_setting) {
-				.name = "blkio.throttle.read_bps_device",
-				.value = READ_BYTES
-			},
-            & (struct cgroup_setting) {
-                    .name = "blkio.throttle.write_bps_device",
-                    .value = WRITE_BYTES
-            },
-			&self_to_task,             // must be added to all the new controls added
-			NULL                       // NULL at the end of the array
-		}
-	},
-    & (struct cgroups_control) {
-        .control = CGRP_CPU_SET_CONTROL,
-        .settings = (struct cgroup_setting *[]) {
-                & (struct cgroup_setting) {
-                        .name = "cpuset.cpus",
-                        .value = CPUS
-                },
-                & (struct cgroup_setting) {
-                        .name = "cpuset.mems",
-                        .value = "0"
-                },
-                &self_to_task,             // must be added to all the new controls added
-                NULL                       // NULL at the end of the array
-        }
-    },
-    & (struct cgroups_control) {
-            .control = CGRP_PIDS_CONTROL,
-            .settings = (struct cgroup_setting *[]) {
-                    & (struct cgroup_setting) {
-                            .name = "pids.max",
-                            .value = PIDS
-                    },
-                    &self_to_task,             // must be added to all the new controls added
-                    NULL                       // NULL at the end of the array
-            }
-    },
-    & (struct cgroups_control) {
-            .control = CGRP_CPU_CONTROL,
-            .settings = (struct cgroup_setting *[]) {
-                    & (struct cgroup_setting) {
-                            .name = "cpu.shares",
-                            .value = CPU_SHARES
-                    },
-                    &self_to_task,             // must be added to all the new controls added
-                    NULL                       // NULL at the end of the array
-            }
-    },
-    & (struct cgroups_control) {
-            .control = CGRP_MEMORY_CONTROL,
-            .settings = (struct cgroup_setting *[]) {
-                    & (struct cgroup_setting) {
-                            .name = "memory.limit_in_bytes",
-                            .value = MEMORY
-                    },
-                    &self_to_task,             // must be added to all the new controls added
-                    NULL                       // NULL at the end of the array
-            }
-    },
-    NULL// NULL at the end of the array
+        & (struct cgroups_control) {
+                .control = "blkio",
+                .settings = (struct cgroup_setting *[]) {
+                        & (struct cgroup_setting) {
+                                .name = "blkio.weight",
+                                .value = "64"
+                        },
+                        &self_to_task,             // must be added to all the new controls added
+                        NULL                       // NULL at the end of the array
+                }
+        },
+        NULL                               // NULL at the end of the array
 };
 
+/**
+ * Adds a new control group to the cgroups array if it does not already exist.
+ * Returns the index of the new cgroup or of the existing one
+ * @param controlBlock Name of the control block
+ * @return index of cgroup
+ */
+int addCgroup(char *controlBlock) {
+    int index = 0;
+    while(cgroups[index] != NULL) {
+        if(strcmp(controlBlock, cgroups[index]->control) == 0) return index;
+        index++;
+    }
+
+    struct cgroups_control *newCgroup = (struct cgroups_control *)malloc(sizeof(struct cgroups_control *));
+    strcpy(newCgroup->control, controlBlock);
+    newCgroup->settings = malloc(sizeof(struct cgroup_setting **));
+    newCgroup->settings[0] = &self_to_task;
+    cgroups[index] = newCgroup;
+    cgroups[index+1] = NULL;
+    return index;
+}
+
+void addCgroupSetting(char *controlBlock, char *settingName, char *settingValue) {
+    int index = addCgroup(controlBlock);
+    int settingsIndex = 0;
+    struct cgroup_setting **settingsPointer = cgroups[index]->settings;
+    while(strcmp(settingsPointer[settingsIndex]->name, "tasks") != 0) {
+        settingsIndex++;
+    }
+
+    struct cgroup_setting *tempSetting = (struct cgroup_setting *)malloc(sizeof(struct cgroup_setting));
+    strcpy(tempSetting->name, settingName);
+    strcpy(tempSetting->value, settingValue);
+
+    settingsPointer[settingsIndex] = tempSetting;
+    settingsPointer[settingsIndex+1] = (struct cgroup_setting *)malloc(sizeof(struct cgroup_setting *));
+    settingsPointer[settingsIndex+1] = &self_to_task;
+    //settingsPointer[settingsIndex+2] = malloc(sizeof(struct cgroup_setting *));
+    //settingsPointer[settingsIndex+2] = NULL;
+    return;
+}
 
 /**
  *  ------------------------ TODO ------------------------
@@ -103,7 +92,7 @@ struct cgroups_control *cgroups[6] = {
  *          1. m : The rootfs of the container
  *          2. u : The userid mapping of the current user inside the container
  *          3. c : The initial process to run inside the container
- *  
+ *
  *   You must extend it to support the following flags:
  *          1. C : The cpu shares weight to be set (cpu-cgroup controller)                              DONE
  *          2. s : The cpu cores to which the container must be restricted (cpuset-cgroup controller)   DONE
@@ -112,7 +101,7 @@ struct cgroups_control *cgroups[6] = {
  *          5. r : The read IO rate in bytes (blkio-cgroup controller)                                  DONE
  *          6. w : The write IO rate in bytes (blkio-cgroup controller)                                 DONE
  *          7. H : The hostname of the container                                                        DONE
- * 
+ *
  *   You can follow the current method followed to take in these flags and extend it.
  *   Note that the current implementation necessitates the "-c" flag to be the last one.
  *   For flags 1-6 you can add a new 'cgroups_control' to the existing 'cgroups' array
@@ -129,6 +118,7 @@ int main(int argc, char **argv)
     pid_t child_pid = 0;
     int last_optind = 0;
     bool found_cflag = false;
+
     while ((option = getopt(argc, argv, "m:u:c:C:s:p:M:r:w:H:")))
     {
         if (found_cflag)
@@ -153,28 +143,29 @@ int main(int argc, char **argv)
                 found_cflag = true;
                 break;
             case 'C':
-                strcpy(cgroups[3]->settings[0]->value, optarg);
+                addCgroupSetting(CGRP_CPU_CONTROL, "cpu.shares", optarg);
                 break;
             case 's':
-                strcpy(cgroups[1]->settings[0]->value, optarg);
+                addCgroupSetting(CGRP_CPU_SET_CONTROL, "cpuset.mems", "0");
+                addCgroupSetting(CGRP_CPU_SET_CONTROL, "cpuset.cpus", optarg);
                 break;
             case 'p':
-                strcpy(cgroups[2]->settings[0]->value, optarg);
+                addCgroupSetting(CGRP_PIDS_CONTROL, "pids.max", optarg);
                 break;
             case 'M':
-                strcpy(cgroups[4]->settings[0]->value, optarg);
+                addCgroupSetting(CGRP_MEMORY_CONTROL, "memory.limit_in_bytes", optarg);
                 break;
             case 'r':
+                memset(temp, 0, strlen(temp));
                 strcat(temp, "8:0 ");
                 strcat(temp, optarg);
-                strcpy(cgroups[0]->settings[0]->value, temp);
-                memset(temp, 0, strlen(temp));
+                addCgroupSetting(CGRP_BLKIO_CONTROL, "blkio.throttle.read_bps_device", temp);
                 break;
             case 'w':
+                memset(temp, 0, strlen(temp));
                 strcat(temp, "8:0 ");
                 strcat(temp, optarg);
-                strcpy(cgroups[0]->settings[1]->value, temp);
-                memset(temp, 0, strlen(temp));
+                addCgroupSetting(CGRP_BLKIO_CONTROL, "blkio.throttle.write_bps_device", temp);
                 break;
             case 'H':
                 config.hostname = optarg;
@@ -185,6 +176,9 @@ int main(int argc, char **argv)
         }
         last_optind = optind;
     }
+
+    //printf("%s\n", cgroups[0]->control);
+    //return 1;
 
     if (!config.argc || !config.mount_dir){
         cleanup_stuff(argv, sockets);
