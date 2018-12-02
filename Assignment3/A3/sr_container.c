@@ -29,62 +29,7 @@ struct cgroup_setting self_to_task = {
  *      in the comments for the main() below
  *  ------------------------------------------------------
  **/
-struct cgroups_control *cgroups[6] = {
-        & (struct cgroups_control) {
-                .control = "blkio",
-                .settings = (struct cgroup_setting *[]) {
-                        & (struct cgroup_setting) {
-                                .name = "blkio.weight",
-                                .value = "64"
-                        },
-                        &self_to_task,             // must be added to all the new controls added
-                        NULL                       // NULL at the end of the array
-                }
-        },
-        NULL                               // NULL at the end of the array
-};
-
-/**
- * Adds a new control group to the cgroups array if it does not already exist.
- * Returns the index of the new cgroup or of the existing one
- * @param controlBlock Name of the control block
- * @return index of cgroup
- */
-int addCgroup(char *controlBlock) {
-    int index = 0;
-    while(cgroups[index] != NULL) {
-        if(strcmp(controlBlock, cgroups[index]->control) == 0) return index;
-        index++;
-    }
-
-    struct cgroups_control *newCgroup = (struct cgroups_control *)malloc(sizeof(struct cgroups_control *));
-    strcpy(newCgroup->control, controlBlock);
-    newCgroup->settings = malloc(sizeof(struct cgroup_setting **));
-    newCgroup->settings[0] = &self_to_task;
-    cgroups[index] = newCgroup;
-    cgroups[index+1] = NULL;
-    return index;
-}
-
-void addCgroupSetting(char *controlBlock, char *settingName, char *settingValue) {
-    int index = addCgroup(controlBlock);
-    int settingsIndex = 0;
-    struct cgroup_setting **settingsPointer = cgroups[index]->settings;
-    while(strcmp(settingsPointer[settingsIndex]->name, "tasks") != 0) {
-        settingsIndex++;
-    }
-
-    struct cgroup_setting *tempSetting = (struct cgroup_setting *)malloc(sizeof(struct cgroup_setting));
-    strcpy(tempSetting->name, settingName);
-    strcpy(tempSetting->value, settingValue);
-
-    settingsPointer[settingsIndex] = tempSetting;
-    settingsPointer[settingsIndex+1] = (struct cgroup_setting *)malloc(sizeof(struct cgroup_setting *));
-    settingsPointer[settingsIndex+1] = &self_to_task;
-    //settingsPointer[settingsIndex+2] = malloc(sizeof(struct cgroup_setting *));
-    //settingsPointer[settingsIndex+2] = NULL;
-    return;
-}
+struct cgroups_control *cgroups[6] = {NULL, NULL, NULL, NULL, NULL, NULL};
 
 /**
  *  ------------------------ TODO ------------------------
@@ -138,6 +83,7 @@ int main(int argc, char **argv)
                 }
                 break;
             case 'c':
+                addCgroupSetting(CGRP_BLKIO_CONTROL, "blkio.weight", "64");
                 config.argc = argc - last_optind - 1;
                 config.argv = &argv[argc - config.argc];
                 found_cflag = true;
@@ -176,9 +122,6 @@ int main(int argc, char **argv)
         }
         last_optind = optind;
     }
-
-    //printf("%s\n", cgroups[0]->control);
-    //return 1;
 
     if (!config.argc || !config.mount_dir){
         cleanup_stuff(argv, sockets);
@@ -255,7 +198,7 @@ int main(int argc, char **argv)
      * ------------------------------------------------------
      **/
 
-    // You code for clone() goes here
+    //Allocate the stack for our cloned process
     stack = malloc(STACK_SIZE);
     if(stack == NULL) {
         perror("Failed to allocate memory for the stack.");
@@ -265,6 +208,7 @@ int main(int argc, char **argv)
     }
     stackTop = stack + STACK_SIZE;
 
+    //Set the appropriate flags to isolate the namespaces for the container
     int flags = CLONE_NEWNET | CLONE_NEWCGROUP | CLONE_NEWIPC | CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWPID | SIGCHLD;
     child_pid = clone(child_function, stackTop, flags, &config);
 
@@ -321,4 +265,59 @@ int child_function(void *arg)
         return -1;
     }
     return 0;
+}
+
+/**
+* Adds a new control group to the cgroups array if it does not already exist.
+* Returns the index of the new cgroup or of the existing one and adds the tasks
+* setting to the new cgroup
+* @param controlBlock Name of the control block
+* @return index of cgroup
+*/
+int addCgroup(char *controlBlock) {
+    int index = 0;
+    while(cgroups[index] != NULL) {
+        if(strcmp(controlBlock, cgroups[index]->control) == 0) return index;
+        index++;
+    }
+
+    struct cgroups_control *newCgroup = malloc(sizeof(struct cgroups_control));
+    struct cgroup_setting **temp;
+    temp = malloc(sizeof(struct cgroup_setting *)*5);
+    for(int i=0; i<5; i++) {
+        *(temp + i) = malloc(sizeof(struct cgroup_setting));
+    }
+
+    strcpy(newCgroup->control, controlBlock);
+
+    temp[0] = &self_to_task;
+    temp[1] = NULL;
+
+    newCgroup->settings = temp;
+    cgroups[index] = newCgroup;
+    cgroups[index+1] = NULL;
+    return index;
+}
+
+/**
+ * Adds the control group setting to the approprate cgroup
+ * @param controlBlock name of control group
+ * @param settingName name of setting
+ * @param settingValue value of setting
+ */
+void addCgroupSetting(char *controlBlock, char *settingName, char *settingValue) {
+    int index = addCgroup(controlBlock);
+    int settingsIndex = 0;
+    struct cgroup_setting **settingsPointer = cgroups[index]->settings;
+
+    while(strcmp(settingsPointer[settingsIndex]->name, "tasks") != 0) {
+        settingsIndex++;
+    }
+
+    settingsPointer[settingsIndex] = settingsPointer[settingsIndex+2];
+    strcpy(settingsPointer[settingsIndex]->name, settingName);
+    strcpy(settingsPointer[settingsIndex]->value, settingValue);
+    settingsPointer[settingsIndex+1] = &self_to_task;
+    settingsPointer[settingsIndex+2] = NULL;
+    return;
 }

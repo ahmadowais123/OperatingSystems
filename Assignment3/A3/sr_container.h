@@ -92,7 +92,8 @@ int setup_cgroup_controls(struct child_config *config, struct cgroups_control **
 int free_cgroup_controls(struct child_config *config, struct cgroups_control **cgrps);
 int setup_child_uid_map(pid_t child_pid, int fd);
 int setup_child_userns(struct child_config *config);
-int choose_child_hostname(char *buff, size_t len);
+int addCgroup(char *controlBlock);
+void addCgroupSetting(char *controlBlock, char *settingName, char *settingValue);
 
 void clean_child_structures(struct child_config *config, struct cgroups_control **cgrps, char *child_stack);
 void cleanup_stuff(char *argv[], int sockets[2]);
