@@ -57,7 +57,6 @@ int main(int argc, char **argv)
 {
     struct child_config config = {0};
     void *stack, *stackTop;
-    char temp[256];
     int option = 0;
     int sockets[2] = {0};
     pid_t child_pid = 0;
@@ -102,16 +101,10 @@ int main(int argc, char **argv)
                 addCgroupSetting(CGRP_MEMORY_CONTROL, "memory.limit_in_bytes", optarg);
                 break;
             case 'r':
-                memset(temp, 0, strlen(temp));
-                strcat(temp, "8:0 ");
-                strcat(temp, optarg);
-                addCgroupSetting(CGRP_BLKIO_CONTROL, "blkio.throttle.read_bps_device", temp);
+                addCgroupSetting(CGRP_BLKIO_CONTROL, "blkio.throttle.read_bps_device", optarg);
                 break;
             case 'w':
-                memset(temp, 0, strlen(temp));
-                strcat(temp, "8:0 ");
-                strcat(temp, optarg);
-                addCgroupSetting(CGRP_BLKIO_CONTROL, "blkio.throttle.write_bps_device", temp);
+                addCgroupSetting(CGRP_BLKIO_CONTROL, "blkio.throttle.write_bps_device", optarg);
                 break;
             case 'H':
                 config.hostname = optarg;
