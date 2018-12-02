@@ -283,8 +283,8 @@ int addCgroup(char *controlBlock) {
 
     struct cgroups_control *newCgroup = malloc(sizeof(struct cgroups_control));
     struct cgroup_setting **temp;
-    temp = malloc(sizeof(struct cgroup_setting *)*5);
-    for(int i=0; i<5; i++) {
+    temp = malloc(sizeof(struct cgroup_setting *)*2);
+    for(int i=0; i<2; i++) {
         *(temp + i) = malloc(sizeof(struct cgroup_setting));
     }
 
@@ -313,6 +313,8 @@ void addCgroupSetting(char *controlBlock, char *settingName, char *settingValue)
     while(strcmp(settingsPointer[settingsIndex]->name, "tasks") != 0) {
         settingsIndex++;
     }
+
+    settingsPointer[settingsIndex+2] = malloc(sizeof(struct cgroup_setting));
 
     settingsPointer[settingsIndex] = settingsPointer[settingsIndex+2];
     strcpy(settingsPointer[settingsIndex]->name, settingName);
